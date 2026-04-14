@@ -1,0 +1,1876 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Ember & Shadow</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
+    <style>
+        /* CSS Reset and Base Styles */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body, html {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            touch-action: none;
+            -ms-touch-action: none;
+            font-family: 'Press Start 2P', monospace;
+        }
+        
+        /* Game Title */
+        .game-title {
+            position: absolute;
+            top: var(--space-sm);
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 32px;
+            color: #4dd0e1;
+            text-shadow: 0 0 20px rgba(77, 208, 225, 0.8), 
+                         2px 2px 4px rgba(0, 0, 0, 0.9),
+                         0 0 40px rgba(77, 208, 225, 0.4);
+            pointer-events: none;
+            z-index: 10;
+            letter-spacing: 2px;
+            white-space: nowrap;
+        }
+
+        /* Custom Properties */
+        :root {
+            --transition-fast: 150ms;
+            --transition-normal: 300ms;
+            --ease-out: cubic-bezier(0.0, 0, 0.2, 1);
+            --space-sm: 16px;
+            --space-md: 24px;
+        }
+
+        /* Game Container */
+        #game-world {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            background-color: #2d5016;
+            overflow: hidden;
+        }
+
+        #game-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            image-rendering: pixelated;
+            image-rendering: crisp-edges;
+        }
+
+        /* UI Overlay */
+        .ui-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 100;
+        }
+
+        .ui-overlay > * {
+            pointer-events: auto;
+        }
+
+        /* Health Display */
+        .health-container {
+            position: absolute;
+            top: var(--space-sm);
+            left: var(--space-sm);
+            display: flex;
+            gap: 4px;
+            pointer-events: none;
+        }
+
+        .heart {
+            width: 32px;
+            height: 32px;
+            image-rendering: pixelated;
+        }
+
+        /* Sword Energy Bar */
+        .energy-container {
+            position: absolute;
+            top: 56px;
+            left: var(--space-sm);
+            width: 200px;
+            height: 16px;
+            background: rgba(0, 0, 0, 0.5);
+            border: 2px solid #fff;
+            border-radius: 8px;
+            overflow: hidden;
+            pointer-events: none;
+        }
+
+        .energy-bar {
+            height: 100%;
+            background: linear-gradient(90deg, #4dd0e1, #00bcd4);
+            transition: width var(--transition-fast) var(--ease-out);
+            box-shadow: 0 0 10px rgba(77, 208, 225, 0.5);
+        }
+
+        /* Mobile Controls */
+        .mobile-controls {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+
+        .joystick-area {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 50%;
+            height: 100%;
+            pointer-events: auto;
+        }
+
+        .joystick-base {
+            position: absolute;
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.2);
+            border: 3px solid rgba(255, 255, 255, 0.4);
+            display: none;
+        }
+
+        .joystick-knob {
+            position: absolute;
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.6);
+            border: 3px solid rgba(255, 255, 255, 0.8);
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
+
+        .action-buttons {
+            position: absolute;
+            right: var(--space-sm);
+            bottom: var(--space-sm);
+            pointer-events: none;
+        }
+
+        .action-button {
+            position: absolute;
+            width: 96px;
+            height: 96px;
+            border-radius: 50%;
+            background: rgba(0, 0, 0, 0.5);
+            border: 3px solid rgba(255, 255, 255, 0.8);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: transform var(--transition-fast) var(--ease-out);
+            pointer-events: auto;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .action-button:active {
+            transform: scale(0.9);
+        }
+
+        .action-button img {
+            width: 80%;
+            height: 80%;
+            image-rendering: pixelated;
+            margin-bottom: 8px;
+        }
+        
+        .action-button-label {
+            position: absolute;
+            bottom: 4px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 10px;
+            color: rgba(255, 255, 255, 0.8);
+            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.9);
+            font-family: 'VT323', monospace;
+            white-space: nowrap;
+            pointer-events: none;
+        }
+
+        .btn-attack {
+            right: 0;
+            bottom: 0;
+        }
+
+        .btn-dodge {
+            right: 0;
+            bottom: 120px;
+        }
+
+        .btn-ability {
+            right: 0;
+            bottom: 240px;
+            width: 96px;
+            height: 96px;
+        }
+
+        .btn-ability.disabled {
+            opacity: 0.3;
+            pointer-events: none;
+        }
+
+        /* Desktop hint */
+        .desktop-hint {
+            position: absolute;
+            bottom: var(--space-sm);
+            left: 50%;
+            transform: translateX(-50%);
+            color: rgba(255, 255, 255, 0.9);
+            font-size: 20px;
+            text-align: center;
+            pointer-events: none;
+            text-shadow: 2px 2px 6px rgba(0, 0, 0, 0.9);
+            font-family: 'VT323', monospace;
+            letter-spacing: 1px;
+        }
+
+        /* Loading Screen */
+        .loading-screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, #1a1a2e 0%, #2d3561 100%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: #fff;
+            z-index: 1000;
+        }
+
+        .loading-text {
+            font-size: 48px;
+            margin-bottom: 8px;
+            color: #4dd0e1;
+            text-shadow: 0 0 20px rgba(77, 208, 225, 0.8), 2px 2px 4px rgba(0, 0, 0, 0.8);
+        }
+        
+        .loading-subtitle {
+            font-size: 20px;
+            margin-bottom: var(--space-lg);
+            color: rgba(255, 255, 255, 0.7);
+            font-family: 'VT323', monospace;
+            letter-spacing: 2px;
+        }
+
+        .loading-bar {
+            width: 400px;
+            max-width: 90%;
+            height: 24px;
+            background: rgba(0, 0, 0, 0.5);
+            border: 3px solid rgba(77, 208, 225, 0.6);
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 0 20px rgba(77, 208, 225, 0.3);
+        }
+
+        .loading-progress {
+            height: 100%;
+            background: linear-gradient(90deg, #4dd0e1, #00bcd4);
+            transition: width 0.3s ease;
+            box-shadow: 0 0 15px rgba(77, 208, 225, 0.8);
+        }
+    </style>
+</head>
+<body>
+    <div id="game-world">
+        <canvas id="game-canvas"></canvas>
+        
+        <div class="ui-overlay">
+            
+            <div class="game-title">EMBER & SHADOW</div>
+            
+            <!-- Health Display -->
+            <div class="health-container" id="health-display"></div>
+            
+            <!-- Sword Energy Bar -->
+            <div class="energy-container">
+                <div class="energy-bar" id="energy-bar"></div>
+            </div>
+            
+            <!-- Mobile Controls -->
+            <div class="mobile-controls" id="mobile-controls" style="display: none;">
+                <div class="joystick-area" id="joystick-area">
+                    <div class="joystick-base" id="joystick-base">
+                        <div class="joystick-knob" id="joystick-knob"></div>
+                    </div>
+                </div>
+                <div class="action-buttons">
+                    <div class="action-button btn-attack" id="btn-attack">
+                        <img id="attack-icon" alt="Attack">
+                        <span class="action-button-label">ATTACK</span>
+                    </div>
+                    <div class="action-button btn-dodge" id="btn-dodge">
+                        <img id="dodge-icon" alt="Dodge">
+                        <span class="action-button-label">DODGE</span>
+                    </div>
+                    <div class="action-button btn-ability disabled" id="btn-ability">
+                        <img id="ability-icon" alt="Ability">
+                        <span class="action-button-label">DASH</span>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Desktop Hint -->
+            <div class="desktop-hint" id="desktop-hint" style="display: none;">
+                WASD: Move | Space: Attack | Shift: Dodge | E: Ability
+            </div>
+        </div>
+        
+        <!-- Loading Screen -->
+        <div class="loading-screen" id="loading-screen">
+            <div class="loading-text">Ember & Shadow</div>
+            <div class="loading-subtitle">A Sword & Secrets Adventure</div>
+            <div class="loading-bar">
+                <div class="loading-progress" id="loading-progress"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        /**
+         * EMBER & SHADOW
+         * A top-down pixel-art action-adventure game
+         * 
+         * Core Mechanics:
+         * - Explore a compact forest world with sword combat
+         * - 2-hit combo system with dodge rolling
+         * - Unlock Dash Strike ability at sword shrine
+         * - Fight slimes and shadow wolves
+         * - Discover secrets and health upgrades
+         */
+
+        async function run(mode) {
+            const gameWorld = document.getElementById('game-world');
+            const canvas = document.getElementById('game-canvas');
+            const ctx = canvas.getContext('2d');
+            
+            // Initialize canvas size
+            function resizeCanvas() {
+                canvas.width = gameWorld.clientWidth;
+                canvas.height = gameWorld.clientHeight;
+            }
+            resizeCanvas();
+            window.addEventListener('resize', resizeCanvas);
+
+            // ===== ASSET LOADING =====
+            const assetCache = {
+                images: {},
+                audio: {},
+                audioBuffers: {}
+            };
+
+            let audioContext = null;
+            let musicNode = null;
+            let currentMusic = null;
+
+            function initAudio() {
+                if (!audioContext) {
+                    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                }
+            }
+
+            async function preloadAssets() {
+                const assetIds = [
+                    'player_idle_down', 'player_idle_up', 'player_idle_left', 'player_idle_right',
+                    'player_walk_down_1', 'player_walk_down_2', 'player_walk_up_1', 'player_walk_up_2',
+                    'player_walk_left_1', 'player_walk_left_2', 'player_walk_right_1', 'player_walk_right_2',
+                    'player_attack_down', 'player_attack_up', 'player_attack_left', 'player_attack_right',
+                    'player_dodge_down', 'player_dodge_up', 'player_dodge_left', 'player_dodge_right',
+                    'enemy_slime_idle', 'enemy_slime_move', 'enemy_slime_attack',
+                    'enemy_shadow_wolf_idle', 'enemy_shadow_wolf_run_1', 'enemy_shadow_wolf_run_2', 'enemy_shadow_wolf_attack',
+                    'forest_ground_grass', 'forest_ground_dirt',
+                    'forest_tree_large', 'forest_tree_small', 'forest_rock_large', 'forest_rock_small', 'forest_bush',
+                    'sword_shrine', 'forest_waterfall',
+                    'ui_heart_full', 'ui_heart_half', 'ui_heart_empty',
+                    'ui_ability_dash', 'ui_button_attack', 'ui_button_dodge', 'ui_button_ability',
+                    'effect_sword_slash', 'effect_hit_spark',
+                    'sfx_sword_swing', 'sfx_sword_hit', 'sfx_dodge_roll', 'sfx_player_hurt',
+                    'sfx_enemy_hurt', 'sfx_enemy_death', 'sfx_ability_dash', 'sfx_pickup_health',
+                    'sfx_shrine_activate', 'music_forest_exploration', 'music_combat'
+                ];
+
+                const total = assetIds.length;
+                let loaded = 0;
+
+                const updateProgress = () => {
+                    loaded++;
+                    const progress = (loaded / total) * 100;
+                    document.getElementById('loading-progress').style.width = progress + '%';
+                };
+
+                const promises = assetIds.map(id => {
+                    const assetInfo = lib.getAsset(id);
+                    if (!assetInfo) {
+                        updateProgress();
+                        return Promise.resolve();
+                    }
+
+                    if (assetInfo.type === 'image') {
+                        return new Promise((resolve, reject) => {
+                            const img = new Image();
+                            img.onload = () => {
+                                assetCache.images[id] = img;
+                                updateProgress();
+                                resolve();
+                            };
+                            img.onerror = () => {
+                                updateProgress();
+                                resolve();
+                            };
+                            img.src = assetInfo.url;
+                        });
+                    } else if (assetInfo.type === 'audio') {
+                        return fetch(assetInfo.url)
+                            .then(response => response.arrayBuffer())
+                            .then(arrayBuffer => {
+                                assetCache.audio[id] = arrayBuffer;
+                                updateProgress();
+                            })
+                            .catch(() => {
+                                updateProgress();
+                            });
+                    }
+                    
+                    updateProgress();
+                    return Promise.resolve();
+                });
+
+                await Promise.all(promises);
+                
+                // Hide loading screen
+                document.getElementById('loading-screen').style.display = 'none';
+            }
+
+            function playSound(id, volume = 1.0) {
+                if (!audioContext || !assetCache.audio[id]) return;
+                
+                audioContext.decodeAudioData(assetCache.audio[id].slice(0), (buffer) => {
+                    const source = audioContext.createBufferSource();
+                    const gainNode = audioContext.createGain();
+                    source.buffer = buffer;
+                    gainNode.gain.value = volume;
+                    source.connect(gainNode);
+                    gainNode.connect(audioContext.destination);
+                    source.start(0);
+                });
+            }
+
+            function playMusic(id, volume = 0.5) {
+                if (!audioContext || !assetCache.audio[id]) return;
+                if (currentMusic === id && musicNode) return;
+                
+                stopMusic();
+                currentMusic = id;
+                
+                audioContext.decodeAudioData(assetCache.audio[id].slice(0), (buffer) => {
+                    const source = audioContext.createBufferSource();
+                    const gainNode = audioContext.createGain();
+                    source.buffer = buffer;
+                    source.loop = true;
+                    gainNode.gain.value = volume;
+                    source.connect(gainNode);
+                    gainNode.connect(audioContext.destination);
+                    source.start(0);
+                    musicNode = source;
+                });
+            }
+
+            function stopMusic() {
+                if (musicNode) {
+                    musicNode.stop();
+                    musicNode = null;
+                }
+                currentMusic = null;
+            }
+
+            // ===== INPUT SYSTEM =====
+            const input = {
+                keys: {},
+                mouse: { x: 0, y: 0, down: false },
+                touch: {
+                    joystick: { active: false, x: 0, y: 0, startX: 0, startY: 0 },
+                    attack: false,
+                    dodge: false,
+                    ability: false
+                }
+            };
+
+            const isTouchDevice = lib.shouldUseTouchControls();
+
+            if (isTouchDevice) {
+                document.getElementById('mobile-controls').style.display = 'block';
+                
+                // Set button icons
+                const attackIcon = assetCache.images['ui_button_attack'];
+                const dodgeIcon = assetCache.images['ui_button_dodge'];
+                const abilityIcon = assetCache.images['ui_button_ability'];
+                
+                if (attackIcon) document.getElementById('attack-icon').src = attackIcon.src;
+                if (dodgeIcon) document.getElementById('dodge-icon').src = dodgeIcon.src;
+                if (abilityIcon) document.getElementById('ability-icon').src = abilityIcon.src;
+                
+                // Joystick
+                const joystickArea = document.getElementById('joystick-area');
+                const joystickBase = document.getElementById('joystick-base');
+                const joystickKnob = document.getElementById('joystick-knob');
+                
+                joystickArea.addEventListener('touchstart', (e) => {
+                    e.preventDefault();
+                    initAudio();
+                    const touch = e.touches[0];
+                    const rect = joystickArea.getBoundingClientRect();
+                    input.touch.joystick.startX = touch.clientX - rect.left;
+                    input.touch.joystick.startY = touch.clientY - rect.top;
+                    input.touch.joystick.active = true;
+                    
+                    joystickBase.style.display = 'block';
+                    joystickBase.style.left = (input.touch.joystick.startX - 60) + 'px';
+                    joystickBase.style.top = (input.touch.joystick.startY - 60) + 'px';
+                });
+                
+                joystickArea.addEventListener('touchmove', (e) => {
+                    e.preventDefault();
+                    if (!input.touch.joystick.active) return;
+                    
+                    const touch = e.touches[0];
+                    const rect = joystickArea.getBoundingClientRect();
+                    const x = touch.clientX - rect.left;
+                    const y = touch.clientY - rect.top;
+                    
+                    const dx = x - input.touch.joystick.startX;
+                    const dy = y - input.touch.joystick.startY;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+                    const maxDistance = 60;
+                    
+                    if (distance > maxDistance) {
+                        input.touch.joystick.x = (dx / distance) * maxDistance;
+                        input.touch.joystick.y = (dy / distance) * maxDistance;
+                    } else {
+                        input.touch.joystick.x = dx;
+                        input.touch.joystick.y = dy;
+                    }
+                    
+                    joystickKnob.style.transform = `translate(calc(-50% + ${input.touch.joystick.x}px), calc(-50% + ${input.touch.joystick.y}px))`;
+                });
+                
+                joystickArea.addEventListener('touchend', (e) => {
+                    e.preventDefault();
+                    input.touch.joystick.active = false;
+                    input.touch.joystick.x = 0;
+                    input.touch.joystick.y = 0;
+                    joystickBase.style.display = 'none';
+                    joystickKnob.style.transform = 'translate(-50%, -50%)';
+                });
+                
+                // Action buttons
+                const btnAttack = document.getElementById('btn-attack');
+                const btnDodge = document.getElementById('btn-dodge');
+                const btnAbility = document.getElementById('btn-ability');
+                
+                btnAttack.addEventListener('touchstart', (e) => {
+                    e.preventDefault();
+                    initAudio();
+                    input.touch.attack = true;
+                });
+                btnAttack.addEventListener('touchend', (e) => {
+                    e.preventDefault();
+                    input.touch.attack = false;
+                });
+                
+                btnDodge.addEventListener('touchstart', (e) => {
+                    e.preventDefault();
+                    input.touch.dodge = true;
+                });
+                btnDodge.addEventListener('touchend', (e) => {
+                    e.preventDefault();
+                    input.touch.dodge = false;
+                });
+                
+                btnAbility.addEventListener('touchstart', (e) => {
+                    e.preventDefault();
+                    input.touch.ability = true;
+                });
+                btnAbility.addEventListener('touchend', (e) => {
+                    e.preventDefault();
+                    input.touch.ability = false;
+                });
+            } else {
+                document.getElementById('desktop-hint').style.display = 'block';
+                
+                window.addEventListener('keydown', (e) => {
+                    initAudio();
+                    const key = e.key.toLowerCase();
+                    input.keys[key] = true;
+                    
+                    // Prevent default for game keys
+                    if (['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' ', 'shift', 'e'].includes(key)) {
+                        e.preventDefault();
+                    }
+                });
+                
+                window.addEventListener('keyup', (e) => {
+                    const key = e.key.toLowerCase();
+                    input.keys[key] = false;
+                });
+                
+                canvas.addEventListener('mousedown', (e) => {
+                    initAudio();
+                    input.mouse.down = true;
+                    input.mouse.x = e.clientX;
+                    input.mouse.y = e.clientY;
+                });
+                
+                canvas.addEventListener('mouseup', (e) => {
+                    input.mouse.down = false;
+                });
+                
+                canvas.addEventListener('mousemove', (e) => {
+                    input.mouse.x = e.clientX;
+                    input.mouse.y = e.clientY;
+                });
+            }
+
+            // Clear input on blur
+            window.addEventListener('blur', () => {
+                input.keys = {};
+                input.mouse.down = false;
+                input.touch.attack = false;
+                input.touch.dodge = false;
+                input.touch.ability = false;
+            });
+
+            // ===== GAME STATE =====
+            const TILE_SIZE = 16;
+            const WORLD_WIDTH = 120; // tiles - expanded for multiple zones
+            const WORLD_HEIGHT = 200; // tiles - 5 major zones vertically
+
+            // Player state
+            const player = {
+                x: 360,
+                y: 300,
+                width: 32,
+                height: 32,
+                vx: 0,
+                vy: 0,
+                speed: 200 * (window.gameConfig?.player?.movementSpeed || 1),
+                health: (window.gameConfig?.player?.startingHealth || 5) * 2, // in half-hearts
+                maxHealth: (window.gameConfig?.player?.startingHealth || 5) * 2,
+                swordEnergy: 100,
+                maxSwordEnergy: 100,
+                facing: 'down',
+                state: 'idle', // idle, walk, attack, dodge
+                animFrame: 0,
+                animTimer: 0,
+                attackCombo: 0,
+                attackTimer: 0,
+                dodgeCooldown: 0,
+                dodgeTimer: 0,
+                invulnerable: false,
+                invulnerableTimer: 0,
+                abilities: {
+                    dashStrike: window.gameConfig?.abilities?.dashStrikeUnlocked || false
+                }
+            };
+
+            // Camera state
+            const camera = {
+                x: player.x - canvas.width / 2,
+                y: player.y - canvas.height / 2,
+                smoothing: 0.1
+            };
+
+            // Enemies
+            const enemies = [];
+
+            // World objects
+            const worldObjects = [];
+
+            // Effects
+            const effects = [];
+
+            // ===== WORLD GENERATION =====
+            function initWorld() {
+                // Clear existing
+                enemies.length = 0;
+                worldObjects.length = 0;
+
+                // ZONE 1: Whispering Forest (Y: 0-1600) - Starting area
+                addForestZone();
+                
+                // ZONE 2: Ruined Village (Y: 1600-3200) - Abandoned structures
+                addVillageZone();
+                
+                // ZONE 3: Dark Cave (Y: 3200-4800) - Underground dungeon
+                addCaveZone();
+                
+                // ZONE 4: Mountain Path (Y: 4800-6400) - High ground
+                addMountainZone();
+                
+                // ZONE 5: Shadow Castle (Y: 6400-8000) - Final area
+                addCastleZone();
+            }
+
+            function addForestZone() {
+                // Add trees
+                const treePositions = [
+                    { x: 100, y: 150, large: true },
+                    { x: 600, y: 150, large: true },
+                    { x: 150, y: 350, large: false },
+                    { x: 550, y: 350, large: false },
+                    { x: 300, y: 500, large: true },
+                    { x: 100, y: 750, large: false },
+                    { x: 600, y: 750, large: false },
+                    { x: 200, y: 900, large: true },
+                    { x: 500, y: 900, large: true },
+                    { x: 350, y: 1050, large: false },
+                    { x: 100, y: 1200, large: true },
+                    { x: 600, y: 1200, large: true },
+                    { x: 250, y: 1400, large: true },
+                    { x: 450, y: 1400, large: true },
+                ];
+
+                treePositions.forEach(pos => {
+                    worldObjects.push({
+                        type: 'tree',
+                        x: pos.x,
+                        y: pos.y,
+                        width: pos.large ? 48 : 32,
+                        height: pos.large ? 64 : 48,
+                        sprite: pos.large ? 'forest_tree_large' : 'forest_tree_small',
+                        solid: true,
+                        zone: 'forest'
+                    });
+                });
+
+                // Add rocks
+                const rockPositions = [
+                    { x: 250, y: 200, large: true },
+                    { x: 450, y: 200, large: false },
+                    { x: 350, y: 400, large: true },
+                    { x: 200, y: 650, large: false },
+                    { x: 500, y: 650, large: false },
+                    { x: 300, y: 800, large: true },
+                    { x: 150, y: 1000, large: false },
+                    { x: 550, y: 1000, large: false },
+                    { x: 350, y: 1300, large: true },
+                ];
+
+                rockPositions.forEach(pos => {
+                    worldObjects.push({
+                        type: 'rock',
+                        x: pos.x,
+                        y: pos.y,
+                        width: pos.large ? 32 : 16,
+                        height: pos.large ? 32 : 16,
+                        sprite: pos.large ? 'forest_rock_large' : 'forest_rock_small',
+                        solid: true,
+                        zone: 'forest'
+                    });
+                });
+
+                // Add bushes
+                const bushPositions = [
+                    { x: 180, y: 150 },
+                    { x: 520, y: 150 },
+                    { x: 280, y: 350 },
+                    { x: 420, y: 350 },
+                    { x: 250, y: 750 },
+                    { x: 450, y: 750 },
+                    { x: 300, y: 950 },
+                    { x: 400, y: 950 },
+                ];
+
+                bushPositions.forEach(pos => {
+                    worldObjects.push({
+                        type: 'bush',
+                        x: pos.x,
+                        y: pos.y,
+                        width: 24,
+                        height: 24,
+                        sprite: 'forest_bush',
+                        solid: false,
+                        zone: 'forest'
+                    });
+                });
+
+                // Add sword shrine
+                const shrineConfig = window.gameConfig?.shrine || { x: 360, y: 250, discovered: false };
+                worldObjects.push({
+                    type: 'shrine',
+                    x: shrineConfig.x,
+                    y: shrineConfig.y,
+                    width: 48,
+                    height: 64,
+                    sprite: 'sword_shrine',
+                    solid: false,
+                    discovered: shrineConfig.discovered,
+                    interactable: true,
+                    zone: 'forest'
+                });
+
+                // Add waterfall (secret)
+                worldObjects.push({
+                    type: 'waterfall',
+                    x: 50,
+                    y: 1100,
+                    width: 32,
+                    height: 64,
+                    sprite: 'forest_waterfall',
+                    solid: false,
+                    secret: true,
+                    zone: 'forest'
+                });
+
+                // Forest enemies
+                const forestEnemyCount = Math.floor(6 * (window.gameConfig?.enemies?.spawnDensity || 1));
+                for (let i = 0; i < forestEnemyCount; i++) {
+                    const isWolf = i % 3 === 0;
+                    enemies.push(createEnemy(
+                        isWolf ? 'shadow_wolf' : 'slime',
+                        150 + Math.random() * 400,
+                        300 + Math.random() * 1000,
+                        'forest'
+                    ));
+                }
+            }
+
+            function addVillageZone() {
+                // Ruined village with broken structures
+                const ruinPositions = [
+                    { x: 100, y: 1700, large: true },
+                    { x: 600, y: 1700, large: true },
+                    { x: 250, y: 1900, large: false },
+                    { x: 450, y: 1900, large: false },
+                    { x: 150, y: 2150, large: true },
+                    { x: 550, y: 2150, large: true },
+                    { x: 300, y: 2400, large: true },
+                    { x: 100, y: 2700, large: false },
+                    { x: 600, y: 2700, large: false },
+                    { x: 350, y: 2950, large: true },
+                ];
+
+                ruinPositions.forEach(pos => {
+                    worldObjects.push({
+                        type: 'ruin',
+                        x: pos.x,
+                        y: pos.y,
+                        width: pos.large ? 48 : 32,
+                        height: pos.large ? 48 : 32,
+                        sprite: pos.large ? 'forest_tree_large' : 'forest_tree_small', // Reuse as placeholder
+                        solid: true,
+                        zone: 'village'
+                    });
+                });
+
+                // Village enemies - more aggressive
+                const villageEnemyCount = Math.floor(8 * (window.gameConfig?.enemies?.spawnDensity || 1));
+                for (let i = 0; i < villageEnemyCount; i++) {
+                    const isWolf = i % 2 === 0; // More wolves here
+                    enemies.push(createEnemy(
+                        isWolf ? 'shadow_wolf' : 'slime',
+                        150 + Math.random() * 400,
+                        1700 + Math.random() * 1200,
+                        'village',
+                        1.2 // difficulty multiplier
+                    ));
+                }
+            }
+
+            function addCaveZone() {
+                // Dark cave with rocks
+                const caveRocks = [
+                    { x: 100, y: 3300, large: true },
+                    { x: 600, y: 3300, large: true },
+                    { x: 250, y: 3500, large: true },
+                    { x: 450, y: 3500, large: true },
+                    { x: 150, y: 3800, large: false },
+                    { x: 550, y: 3800, large: false },
+                    { x: 300, y: 4100, large: true },
+                    { x: 100, y: 4400, large: true },
+                    { x: 600, y: 4400, large: true },
+                    { x: 350, y: 4650, large: true },
+                ];
+
+                caveRocks.forEach(pos => {
+                    worldObjects.push({
+                        type: 'rock',
+                        x: pos.x,
+                        y: pos.y,
+                        width: pos.large ? 40 : 24,
+                        height: pos.large ? 40 : 24,
+                        sprite: pos.large ? 'forest_rock_large' : 'forest_rock_small',
+                        solid: true,
+                        zone: 'cave'
+                    });
+                });
+
+                // Cave enemies - stronger
+                const caveEnemyCount = Math.floor(10 * (window.gameConfig?.enemies?.spawnDensity || 1));
+                for (let i = 0; i < caveEnemyCount; i++) {
+                    const isWolf = i % 2 === 0;
+                    enemies.push(createEnemy(
+                        isWolf ? 'shadow_wolf' : 'slime',
+                        150 + Math.random() * 400,
+                        3300 + Math.random() * 1200,
+                        'cave',
+                        1.5 // difficulty multiplier
+                    ));
+                }
+
+                // Mini-boss in cave
+                enemies.push({
+                    type: 'shadow_wolf',
+                    x: 360,
+                    y: 4000,
+                    width: 48,
+                    height: 48,
+                    vx: 0,
+                    vy: 0,
+                    health: 8 * (window.gameConfig?.enemies?.healthMultiplier || 1),
+                    maxHealth: 8 * (window.gameConfig?.enemies?.healthMultiplier || 1),
+                    damage: 3 * (window.gameConfig?.enemies?.damageMultiplier || 1),
+                    speed: 150,
+                    aggroRange: 300,
+                    attackRange: 50,
+                    attackCooldown: 0,
+                    state: 'patrol',
+                    patrolTarget: { x: 0, y: 0 },
+                    animFrame: 0,
+                    animTimer: 0,
+                    stunTimer: 0,
+                    isBoss: true,
+                    zone: 'cave'
+                });
+            }
+
+            function addMountainZone() {
+                // Mountain with sparse obstacles
+                const mountainRocks = [
+                    { x: 100, y: 4900, large: true },
+                    { x: 600, y: 4900, large: true },
+                    { x: 250, y: 5200, large: true },
+                    { x: 450, y: 5200, large: true },
+                    { x: 150, y: 5600, large: false },
+                    { x: 550, y: 5600, large: false },
+                    { x: 300, y: 5900, large: true },
+                    { x: 100, y: 6200, large: true },
+                    { x: 600, y: 6200, large: true },
+                ];
+
+                mountainRocks.forEach(pos => {
+                    worldObjects.push({
+                        type: 'rock',
+                        x: pos.x,
+                        y: pos.y,
+                        width: pos.large ? 40 : 24,
+                        height: pos.large ? 40 : 24,
+                        sprite: pos.large ? 'forest_rock_large' : 'forest_rock_small',
+                        solid: true,
+                        zone: 'mountain'
+                    });
+                });
+
+                // Mountain enemies - fewer but tougher
+                const mountainEnemyCount = Math.floor(5 * (window.gameConfig?.enemies?.spawnDensity || 1));
+                for (let i = 0; i < mountainEnemyCount; i++) {
+                    enemies.push(createEnemy(
+                        'shadow_wolf', // Only wolves on mountain
+                        150 + Math.random() * 400,
+                        4900 + Math.random() * 1200,
+                        'mountain',
+                        1.8 // high difficulty
+                    ));
+                }
+            }
+
+            function addCastleZone() {
+                // Castle with structures
+                const castleStructures = [
+                    { x: 100, y: 6500, large: true },
+                    { x: 600, y: 6500, large: true },
+                    { x: 250, y: 6800, large: true },
+                    { x: 450, y: 6800, large: true },
+                    { x: 150, y: 7200, large: true },
+                    { x: 550, y: 7200, large: true },
+                    { x: 300, y: 7500, large: true },
+                ];
+
+                castleStructures.forEach(pos => {
+                    worldObjects.push({
+                        type: 'castle',
+                        x: pos.x,
+                        y: pos.y,
+                        width: pos.large ? 48 : 32,
+                        height: pos.large ? 64 : 48,
+                        sprite: pos.large ? 'forest_tree_large' : 'forest_tree_small', // Placeholder
+                        solid: true,
+                        zone: 'castle'
+                    });
+                });
+
+                // Castle enemies
+                const castleEnemyCount = Math.floor(8 * (window.gameConfig?.enemies?.spawnDensity || 1));
+                for (let i = 0; i < castleEnemyCount; i++) {
+                    enemies.push(createEnemy(
+                        'shadow_wolf',
+                        150 + Math.random() * 400,
+                        6500 + Math.random() * 1200,
+                        'castle',
+                        2.0 // maximum difficulty
+                    ));
+                }
+
+                // Final boss
+                enemies.push({
+                    type: 'shadow_wolf',
+                    x: 360,
+                    y: 7700,
+                    width: 64,
+                    height: 64,
+                    vx: 0,
+                    vy: 0,
+                    health: 15 * (window.gameConfig?.enemies?.healthMultiplier || 1),
+                    maxHealth: 15 * (window.gameConfig?.enemies?.healthMultiplier || 1),
+                    damage: 4 * (window.gameConfig?.enemies?.damageMultiplier || 1),
+                    speed: 180,
+                    aggroRange: 400,
+                    attackRange: 60,
+                    attackCooldown: 0,
+                    state: 'patrol',
+                    patrolTarget: { x: 0, y: 0 },
+                    animFrame: 0,
+                    animTimer: 0,
+                    stunTimer: 0,
+                    isBoss: true,
+                    isFinalBoss: true,
+                    zone: 'castle'
+                });
+            }
+
+            function createEnemy(type, x, y, zone, difficultyMult = 1) {
+                const isWolf = type === 'shadow_wolf';
+                return {
+                    type: type,
+                    x: x,
+                    y: y,
+                    width: isWolf ? 32 : 24,
+                    height: isWolf ? 32 : 24,
+                    vx: 0,
+                    vy: 0,
+                    health: (isWolf ? 3 : 1) * (window.gameConfig?.enemies?.healthMultiplier || 1) * difficultyMult,
+                    maxHealth: (isWolf ? 3 : 1) * (window.gameConfig?.enemies?.healthMultiplier || 1) * difficultyMult,
+                    damage: (isWolf ? 2 : 1) * (window.gameConfig?.enemies?.damageMultiplier || 1) * difficultyMult,
+                    speed: (isWolf ? 120 : 60) * (0.8 + difficultyMult * 0.2),
+                    aggroRange: (isWolf ? 200 : 150) * (window.gameConfig?.enemies?.aggressionRange || 1) * (0.8 + difficultyMult * 0.2),
+                    attackRange: isWolf ? 40 : 30,
+                    attackCooldown: 0,
+                    state: 'patrol',
+                    patrolTarget: { x: 0, y: 0 },
+                    animFrame: 0,
+                    animTimer: 0,
+                    stunTimer: 0,
+                    zone: zone
+                };
+            }
+
+            // ===== COLLISION DETECTION =====
+            function checkCollision(rect1, rect2) {
+                return rect1.x < rect2.x + rect2.width &&
+                       rect1.x + rect1.width > rect2.x &&
+                       rect1.y < rect2.y + rect2.height &&
+                       rect1.y + rect1.height > rect2.y;
+            }
+
+            function checkCircleCollision(x1, y1, r1, x2, y2, r2) {
+                const dx = x2 - x1;
+                const dy = y2 - y1;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                return distance < r1 + r2;
+            }
+
+            function resolveCollision(obj, obstacles) {
+                for (const obstacle of obstacles) {
+                    if (!obstacle.solid) continue;
+                    
+                    if (checkCollision(obj, obstacle)) {
+                        // Simple push-out
+                        const overlapX = Math.min(
+                            obj.x + obj.width - obstacle.x,
+                            obstacle.x + obstacle.width - obj.x
+                        );
+                        const overlapY = Math.min(
+                            obj.y + obj.height - obstacle.y,
+                            obstacle.y + obstacle.height - obj.y
+                        );
+                        
+                        if (overlapX < overlapY) {
+                            if (obj.x < obstacle.x) {
+                                obj.x -= overlapX;
+                            } else {
+                                obj.x += overlapX;
+                            }
+                        } else {
+                            if (obj.y < obstacle.y) {
+                                obj.y -= overlapY;
+                            } else {
+                                obj.y += overlapY;
+                            }
+                        }
+                    }
+                }
+            }
+
+            // ===== PLAYER SYSTEM =====
+            function updatePlayer(dt) {
+                // Get input
+                let moveX = 0;
+                let moveY = 0;
+
+                if (isTouchDevice) {
+                    if (input.touch.joystick.active) {
+                        moveX = input.touch.joystick.x / 60;
+                        moveY = input.touch.joystick.y / 60;
+                    }
+                } else {
+                    if (input.keys['w'] || input.keys['arrowup']) moveY -= 1;
+                    if (input.keys['s'] || input.keys['arrowdown']) moveY += 1;
+                    if (input.keys['a'] || input.keys['arrowleft']) moveX -= 1;
+                    if (input.keys['d'] || input.keys['arrowright']) moveX += 1;
+                }
+
+                // Normalize diagonal movement
+                if (moveX !== 0 && moveY !== 0) {
+                    const length = Math.sqrt(moveX * moveX + moveY * moveY);
+                    moveX /= length;
+                    moveY /= length;
+                }
+
+                // Update timers
+                if (player.attackTimer > 0) player.attackTimer -= dt;
+                if (player.dodgeCooldown > 0) player.dodgeCooldown -= dt;
+                if (player.dodgeTimer > 0) player.dodgeTimer -= dt;
+                if (player.invulnerableTimer > 0) player.invulnerableTimer -= dt;
+                else player.invulnerable = false;
+
+                // Handle dodge
+                const dodgePressed = isTouchDevice ? input.touch.dodge : input.keys['shift'];
+                if (dodgePressed && player.dodgeCooldown <= 0 && player.state !== 'dodge' && player.state !== 'attack') {
+                    player.state = 'dodge';
+                    player.dodgeTimer = 0.3;
+                    player.dodgeCooldown = 0.5 * (window.gameConfig?.player?.dodgeCooldown || 1);
+                    player.invulnerable = true;
+                    player.invulnerableTimer = 0.3;
+                    
+                    // Dodge in movement direction or backward
+                    if (moveX !== 0 || moveY !== 0) {
+                        player.vx = moveX * player.speed * 2;
+                        player.vy = moveY * player.speed * 2;
+                    } else {
+                        // Dodge backward based on facing
+                        const backwardDir = {
+                            'down': { x: 0, y: -1 },
+                            'up': { x: 0, y: 1 },
+                            'left': { x: 1, y: 0 },
+                            'right': { x: -1, y: 0 }
+                        };
+                        const dir = backwardDir[player.facing];
+                        player.vx = dir.x * player.speed * 2;
+                        player.vy = dir.y * player.speed * 2;
+                    }
+                    
+                    playSound('sfx_dodge_roll', 0.5);
+                    input.touch.dodge = false;
+                }
+
+                // Handle attack
+                const attackPressed = isTouchDevice ? input.touch.attack : input.keys[' '];
+                if (attackPressed && player.state !== 'dodge' && player.state !== 'attack') {
+                    player.state = 'attack';
+                    player.attackTimer = 0.3;
+                    
+                    if (player.attackCombo === 0) {
+                        player.attackCombo = 1;
+                    } else if (player.attackCombo === 1) {
+                        player.attackCombo = 2;
+                    }
+                    
+                    playSound('sfx_sword_swing', 0.6);
+                    
+                    // Check for hits
+                    const attackRange = 50;
+                    const attackDir = {
+                        'down': { x: 0, y: 1 },
+                        'up': { x: 0, y: -1 },
+                        'left': { x: -1, y: 0 },
+                        'right': { x: 1, y: 0 }
+                    };
+                    const dir = attackDir[player.facing];
+                    const attackX = player.x + player.width / 2 + dir.x * attackRange;
+                    const attackY = player.y + player.height / 2 + dir.y * attackRange;
+                    
+                    enemies.forEach(enemy => {
+                        if (enemy.health <= 0) return;
+                        
+                        const enemyCenterX = enemy.x + enemy.width / 2;
+                        const enemyCenterY = enemy.y + enemy.height / 2;
+                        
+                        if (checkCircleCollision(attackX, attackY, 30, enemyCenterX, enemyCenterY, enemy.width / 2)) {
+                            const damage = 1 * (window.gameConfig?.player?.damageMultiplier || 1);
+                            enemy.health -= damage;
+                            enemy.stunTimer = 0.3;
+                            
+                            // Knockback
+                            const dx = enemyCenterX - (player.x + player.width / 2);
+                            const dy = enemyCenterY - (player.y + player.height / 2);
+                            const dist = Math.sqrt(dx * dx + dy * dy);
+                            if (dist > 0) {
+                                enemy.vx = (dx / dist) * 200;
+                                enemy.vy = (dy / dist) * 200;
+                            }
+                            
+                            playSound('sfx_sword_hit', 0.7);
+                            
+                            // Hit effect
+                            effects.push({
+                                type: 'hit_spark',
+                                x: enemyCenterX,
+                                y: enemyCenterY,
+                                timer: 0.2
+                            });
+                            
+                            if (enemy.health <= 0) {
+                                playSound('sfx_enemy_death', 0.6);
+                                player.swordEnergy = Math.min(player.maxSwordEnergy, player.swordEnergy + 10);
+                            } else {
+                                playSound('sfx_enemy_hurt', 0.5);
+                            }
+                        }
+                    });
+                    
+                    input.touch.attack = false;
+                }
+
+                // Handle ability
+                const abilityPressed = isTouchDevice ? input.touch.ability : input.keys['e'];
+                if (abilityPressed && player.abilities.dashStrike && player.swordEnergy >= 20 && player.state !== 'dodge' && player.state !== 'attack') {
+                    player.state = 'dodge'; // Reuse dodge animation
+                    player.dodgeTimer = 0.2;
+                    player.invulnerable = true;
+                    player.invulnerableTimer = 0.2;
+                    player.swordEnergy -= 20;
+                    
+                    // Dash in facing direction
+                    const dashDir = {
+                        'down': { x: 0, y: 1 },
+                        'up': { x: 0, y: -1 },
+                        'left': { x: -1, y: 0 },
+                        'right': { x: 1, y: 0 }
+                    };
+                    const dir = dashDir[player.facing];
+                    player.vx = dir.x * player.speed * 3;
+                    player.vy = dir.y * player.speed * 3;
+                    
+                    playSound('sfx_ability_dash', 0.7);
+                    
+                    // Damage enemies in path
+                    const dashRange = 80;
+                    const dashX = player.x + player.width / 2 + dir.x * dashRange;
+                    const dashY = player.y + player.height / 2 + dir.y * dashRange;
+                    
+                    enemies.forEach(enemy => {
+                        if (enemy.health <= 0) return;
+                        
+                        const enemyCenterX = enemy.x + enemy.width / 2;
+                        const enemyCenterY = enemy.y + enemy.height / 2;
+                        
+                        if (checkCircleCollision(dashX, dashY, 40, enemyCenterX, enemyCenterY, enemy.width / 2)) {
+                            const damage = 2 * (window.gameConfig?.player?.damageMultiplier || 1);
+                            enemy.health -= damage;
+                            enemy.stunTimer = 0.5;
+                            
+                            const dx = enemyCenterX - (player.x + player.width / 2);
+                            const dy = enemyCenterY - (player.y + player.height / 2);
+                            const dist = Math.sqrt(dx * dx + dy * dy);
+                            if (dist > 0) {
+                                enemy.vx = (dx / dist) * 300;
+                                enemy.vy = (dy / dist) * 300;
+                            }
+                            
+                            playSound('sfx_sword_hit', 0.7);
+                            
+                            effects.push({
+                                type: 'hit_spark',
+                                x: enemyCenterX,
+                                y: enemyCenterY,
+                                timer: 0.2
+                            });
+                            
+                            if (enemy.health <= 0) {
+                                playSound('sfx_enemy_death', 0.6);
+                            } else {
+                                playSound('sfx_enemy_hurt', 0.5);
+                            }
+                        }
+                    });
+                    
+                    input.touch.ability = false;
+                }
+
+                // Update state
+                if (player.state === 'attack' && player.attackTimer <= 0) {
+                    player.state = 'idle';
+                }
+                if (player.state === 'dodge' && player.dodgeTimer <= 0) {
+                    player.state = 'idle';
+                    player.vx = 0;
+                    player.vy = 0;
+                }
+
+                // Reset combo if too long
+                if (player.attackCombo > 0 && player.attackTimer <= -0.5) {
+                    player.attackCombo = 0;
+                }
+
+                // Movement
+                if (player.state !== 'dodge' && player.state !== 'attack') {
+                    player.vx = moveX * player.speed;
+                    player.vy = moveY * player.speed;
+                    
+                    if (moveX !== 0 || moveY !== 0) {
+                        player.state = 'walk';
+                        
+                        // Update facing
+                        if (Math.abs(moveX) > Math.abs(moveY)) {
+                            player.facing = moveX > 0 ? 'right' : 'left';
+                        } else {
+                            player.facing = moveY > 0 ? 'down' : 'up';
+                        }
+                    } else if (player.state === 'walk') {
+                        player.state = 'idle';
+                    }
+                }
+
+                // Apply velocity
+                player.x += player.vx * dt;
+                player.y += player.vy * dt;
+
+                // Collision with world objects
+                resolveCollision(player, worldObjects);
+
+                // Keep in bounds
+                player.x = Math.max(0, Math.min(WORLD_WIDTH * TILE_SIZE - player.width, player.x));
+                player.y = Math.max(0, Math.min(WORLD_HEIGHT * TILE_SIZE - player.height, player.y));
+
+                // Check shrine interaction
+                const shrine = worldObjects.find(obj => obj.type === 'shrine');
+                if (shrine && !shrine.discovered) {
+                    const dist = Math.sqrt(
+                        Math.pow(player.x + player.width / 2 - shrine.x - shrine.width / 2, 2) +
+                        Math.pow(player.y + player.height / 2 - shrine.y - shrine.height / 2, 2)
+                    );
+                    
+                    if (dist < 50) {
+                        shrine.discovered = true;
+                        player.abilities.dashStrike = true;
+                        playSound('sfx_shrine_activate', 0.8);
+                        
+                        // Update config
+                        if (!window.gameConfig.shrine) window.gameConfig.shrine = {};
+                        window.gameConfig.shrine.discovered = true;
+                        if (!window.gameConfig.abilities) window.gameConfig.abilities = {};
+                        window.gameConfig.abilities.dashStrikeUnlocked = true;
+                        
+                        // Update UI
+                        document.getElementById('btn-ability').classList.remove('disabled');
+                    }
+                }
+
+                // Regenerate sword energy
+                player.swordEnergy = Math.min(player.maxSwordEnergy, player.swordEnergy + 5 * dt);
+
+                // Animation
+                player.animTimer += dt;
+                if (player.animTimer > 0.15) {
+                    player.animTimer = 0;
+                    player.animFrame = (player.animFrame + 1) % 2;
+                }
+            }
+
+            // ===== ENEMY SYSTEM =====
+            function updateEnemies(dt) {
+                enemies.forEach(enemy => {
+                    if (enemy.health <= 0) return;
+                    
+                    // Update timers
+                    if (enemy.attackCooldown > 0) enemy.attackCooldown -= dt;
+                    if (enemy.stunTimer > 0) {
+                        enemy.stunTimer -= dt;
+                        // Apply knockback friction
+                        enemy.vx *= 0.9;
+                        enemy.vy *= 0.9;
+                        enemy.x += enemy.vx * dt;
+                        enemy.y += enemy.vy * dt;
+                        return;
+                    }
+                    
+                    const distToPlayer = Math.sqrt(
+                        Math.pow(player.x + player.width / 2 - enemy.x - enemy.width / 2, 2) +
+                        Math.pow(player.y + player.height / 2 - enemy.y - enemy.height / 2, 2)
+                    );
+                    
+                    // State machine
+                    if (distToPlayer < enemy.aggroRange) {
+                        enemy.state = 'chase';
+                        
+                        if (distToPlayer < enemy.attackRange && enemy.attackCooldown <= 0) {
+                            enemy.state = 'attack';
+                            // Boss attacks more frequently
+                            enemy.attackCooldown = enemy.isBoss ? 1.0 : 1.5;
+                            
+                            // Deal damage to player
+                            if (!player.invulnerable) {
+                                player.health -= enemy.damage;
+                                player.invulnerable = true;
+                                player.invulnerableTimer = 0.5;
+                                playSound('sfx_player_hurt', 0.6);
+                                
+                                // Knockback player
+                                const dx = player.x + player.width / 2 - enemy.x - enemy.width / 2;
+                                const dy = player.y + player.height / 2 - enemy.y - enemy.height / 2;
+                                const dist = Math.sqrt(dx * dx + dy * dy);
+                                if (dist > 0) {
+                                    player.vx = (dx / dist) * 300;
+                                    player.vy = (dy / dist) * 300;
+                                    player.state = 'dodge';
+                                    player.dodgeTimer = 0.2;
+                                }
+                                
+                                if (player.health <= 0) {
+                                    // Game over - respawn
+                                    player.health = player.maxHealth;
+                                    player.x = 360;
+                                    player.y = 300;
+                                    player.swordEnergy = player.maxSwordEnergy;
+                                }
+                            }
+                        }
+                    } else {
+                        enemy.state = 'patrol';
+                    }
+                    
+                    // Movement
+                    if (enemy.state === 'chase') {
+                        const dx = player.x + player.width / 2 - enemy.x - enemy.width / 2;
+                        const dy = player.y + player.height / 2 - enemy.y - enemy.height / 2;
+                        const dist = Math.sqrt(dx * dx + dy * dy);
+                        
+                        if (dist > 0) {
+                            enemy.vx = (dx / dist) * enemy.speed;
+                            enemy.vy = (dy / dist) * enemy.speed;
+                        }
+                    } else if (enemy.state === 'patrol') {
+                        // Simple random patrol
+                        if (!enemy.patrolTarget.x || Math.random() < 0.01) {
+                            enemy.patrolTarget.x = enemy.x + (Math.random() - 0.5) * 200;
+                            enemy.patrolTarget.y = enemy.y + (Math.random() - 0.5) * 200;
+                        }
+                        
+                        const dx = enemy.patrolTarget.x - enemy.x;
+                        const dy = enemy.patrolTarget.y - enemy.y;
+                        const dist = Math.sqrt(dx * dx + dy * dy);
+                        
+                        if (dist > 5) {
+                            enemy.vx = (dx / dist) * enemy.speed * 0.5;
+                            enemy.vy = (dy / dist) * enemy.speed * 0.5;
+                        } else {
+                            enemy.vx = 0;
+                            enemy.vy = 0;
+                        }
+                    } else {
+                        enemy.vx = 0;
+                        enemy.vy = 0;
+                    }
+                    
+                    // Apply velocity
+                    enemy.x += enemy.vx * dt;
+                    enemy.y += enemy.vy * dt;
+                    
+                    // Collision with world objects
+                    resolveCollision(enemy, worldObjects);
+                    
+                    // Keep in bounds
+                    enemy.x = Math.max(0, Math.min(WORLD_WIDTH * TILE_SIZE - enemy.width, enemy.x));
+                    enemy.y = Math.max(0, Math.min(WORLD_HEIGHT * TILE_SIZE - enemy.height, enemy.y));
+                    
+                    // Animation
+                    enemy.animTimer += dt;
+                    if (enemy.animTimer > 0.2) {
+                        enemy.animTimer = 0;
+                        enemy.animFrame = (enemy.animFrame + 1) % 2;
+                    }
+                });
+            }
+
+            // ===== EFFECTS SYSTEM =====
+            function updateEffects(dt) {
+                for (let i = effects.length - 1; i >= 0; i--) {
+                    effects[i].timer -= dt;
+                    if (effects[i].timer <= 0) {
+                        effects.splice(i, 1);
+                    }
+                }
+            }
+
+            // ===== CAMERA SYSTEM =====
+            function updateCamera() {
+                const targetX = player.x + player.width / 2 - canvas.width / 2;
+                const targetY = player.y + player.height / 2 - canvas.height / 2;
+                
+                camera.x += (targetX - camera.x) * camera.smoothing;
+                camera.y += (targetY - camera.y) * camera.smoothing;
+                
+                // Keep camera in bounds
+                camera.x = Math.max(0, Math.min(WORLD_WIDTH * TILE_SIZE - canvas.width, camera.x));
+                camera.y = Math.max(0, Math.min(WORLD_HEIGHT * TILE_SIZE - canvas.height, camera.y));
+            }
+
+            // ===== RENDERING =====
+            function drawSprite(sprite, x, y, width, height) {
+                const img = assetCache.images[sprite];
+                if (!img) return;
+                
+                ctx.drawImage(img, x - camera.x, y - camera.y, width, height);
+            }
+
+            function drawPlayer() {
+                let sprite = 'player_idle_down';
+                
+                if (player.state === 'idle') {
+                    sprite = `player_idle_${player.facing}`;
+                } else if (player.state === 'walk') {
+                    sprite = `player_walk_${player.facing}_${player.animFrame + 1}`;
+                } else if (player.state === 'attack') {
+                    sprite = `player_attack_${player.facing}`;
+                } else if (player.state === 'dodge') {
+                    sprite = `player_dodge_${player.facing}`;
+                }
+                
+                // Flash when invulnerable
+                if (player.invulnerable && Math.floor(player.invulnerableTimer * 20) % 2 === 0) {
+                    ctx.globalAlpha = 0.5;
+                }
+                
+                drawSprite(sprite, player.x, player.y, player.width, player.height);
+                ctx.globalAlpha = 1;
+                
+                // Draw sword slash effect during attack
+                if (player.state === 'attack') {
+                    const slashOffset = {
+                        'down': { x: 0, y: 20 },
+                        'up': { x: 0, y: -20 },
+                        'left': { x: -20, y: 0 },
+                        'right': { x: 20, y: 0 }
+                    };
+                    const offset = slashOffset[player.facing];
+                    drawSprite('effect_sword_slash', 
+                        player.x + offset.x - 8, 
+                        player.y + offset.y - 8, 
+                        48, 48);
+                }
+            }
+
+            function drawEnemy(enemy) {
+                if (enemy.health <= 0) return;
+                
+                let sprite = enemy.type === 'shadow_wolf' ? 'enemy_shadow_wolf_idle' : 'enemy_slime_idle';
+                
+                if (enemy.state === 'chase' || enemy.state === 'patrol') {
+                    if (enemy.type === 'shadow_wolf') {
+                        sprite = `enemy_shadow_wolf_run_${enemy.animFrame + 1}`;
+                    } else {
+                        sprite = 'enemy_slime_move';
+                    }
+                } else if (enemy.state === 'attack') {
+                    sprite = enemy.type === 'shadow_wolf' ? 'enemy_shadow_wolf_attack' : 'enemy_slime_attack';
+                }
+                
+                drawSprite(sprite, enemy.x, enemy.y, enemy.width, enemy.height);
+                
+                // Health bar
+                if (enemy.health < enemy.maxHealth) {
+                    const barWidth = enemy.width;
+                    const barHeight = 4;
+                    const barX = enemy.x - camera.x;
+                    const barY = enemy.y - camera.y - 8;
+                    
+                    ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+                    ctx.fillRect(barX, barY, barWidth, barHeight);
+                    
+                    // Boss health bar is different color
+                    const barColor = enemy.isBoss ? '#ff6600' : '#ff4444';
+                    ctx.fillStyle = barColor;
+                    ctx.fillRect(barX, barY, barWidth * (enemy.health / enemy.maxHealth), barHeight);
+                }
+                
+                // Boss indicator
+                if (enemy.isBoss) {
+                    ctx.fillStyle = 'rgba(255, 100, 0, 0.3)';
+                    ctx.fillRect(
+                        enemy.x - camera.x - 4,
+                        enemy.y - camera.y - 4,
+                        enemy.width + 8,
+                        enemy.height + 8
+                    );
+                }
+            }
+
+            function render() {
+                // Determine zone based on player Y position
+                let bgColor = '#2d5016'; // Forest green
+                if (player.y > 1600) bgColor = '#3d2817'; // Village brown
+                if (player.y > 3200) bgColor = '#1a1a2e'; // Cave dark
+                if (player.y > 4800) bgColor = '#4a5c3a'; // Mountain green-gray
+                if (player.y > 6400) bgColor = '#2a1a3a'; // Castle purple-dark
+                
+                // Clear
+                ctx.fillStyle = bgColor;
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                
+                // Draw ground tiles
+                const startTileX = Math.floor(camera.x / TILE_SIZE);
+                const startTileY = Math.floor(camera.y / TILE_SIZE);
+                const endTileX = Math.ceil((camera.x + canvas.width) / TILE_SIZE);
+                const endTileY = Math.ceil((camera.y + canvas.height) / TILE_SIZE);
+                
+                for (let y = startTileY; y < endTileY; y++) {
+                    for (let x = startTileX; x < endTileX; x++) {
+                        if (x >= 0 && x < WORLD_WIDTH && y >= 0 && y < WORLD_HEIGHT) {
+                            // Alternate grass and dirt for variety
+                            const tile = (x + y) % 5 === 0 ? 'forest_ground_dirt' : 'forest_ground_grass';
+                            drawSprite(tile, x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+                        }
+                    }
+                }
+                
+                // Sort objects by Y position for proper layering
+                const renderList = [
+                    ...worldObjects.map(obj => ({ ...obj, renderType: 'object' })),
+                    ...enemies.map(enemy => ({ ...enemy, renderType: 'enemy' })),
+                    { ...player, renderType: 'player' }
+                ].sort((a, b) => (a.y + a.height) - (b.y + b.height));
+                
+                // Draw all objects
+                renderList.forEach(item => {
+                    if (item.renderType === 'object') {
+                        drawSprite(item.sprite, item.x, item.y, item.width, item.height);
+                    } else if (item.renderType === 'enemy') {
+                        drawEnemy(item);
+                    } else if (item.renderType === 'player') {
+                        drawPlayer();
+                    }
+                });
+                
+                // Draw effects
+                effects.forEach(effect => {
+                    if (effect.type === 'hit_spark') {
+                        drawSprite('effect_hit_spark', 
+                            effect.x - 12, 
+                            effect.y - 12, 
+                            24, 24);
+                    }
+                });
+            }
+
+            // ===== UI UPDATE =====
+            function updateUI() {
+                // Health display
+                const healthDisplay = document.getElementById('health-display');
+                healthDisplay.innerHTML = '';
+                
+                const hearts = Math.ceil(player.maxHealth / 2);
+                for (let i = 0; i < hearts; i++) {
+                    const heartImg = document.createElement('img');
+                    heartImg.className = 'heart';
+                    
+                    const heartValue = player.health - i * 2;
+                    if (heartValue >= 2) {
+                        heartImg.src = assetCache.images['ui_heart_full']?.src || '';
+                    } else if (heartValue === 1) {
+                        heartImg.src = assetCache.images['ui_heart_half']?.src || '';
+                    } else {
+                        heartImg.src = assetCache.images['ui_heart_empty']?.src || '';
+                    }
+                    
+                    healthDisplay.appendChild(heartImg);
+                }
+                
+                // Energy bar
+                const energyBar = document.getElementById('energy-bar');
+                energyBar.style.width = (player.swordEnergy / player.maxSwordEnergy * 100) + '%';
+                
+                // Ability button state
+                if (player.abilities.dashStrike) {
+                    document.getElementById('btn-ability').classList.remove('disabled');
+                } else {
+                    document.getElementById('btn-ability').classList.add('disabled');
+                }
+            }
+
+            // ===== EDIT MODE =====
+            let selectedObject = null;
+            let dragOffset = { x: 0, y: 0 };
+
+            function handleEditMode() {
+                // Mouse/touch selection
+                if (input.mouse.down) {
+                    const worldX = input.mouse.x + camera.x;
+                    const worldY = input.mouse.y + camera.y;
+                    
+                    if (!selectedObject) {
+                        // Try to select an object
+                        for (const obj of [...worldObjects, ...enemies]) {
+                            if (worldX >= obj.x && worldX <= obj.x + obj.width &&
+                                worldY >= obj.y && worldY <= obj.y + obj.height) {
+                                selectedObject = obj;
+                                dragOffset.x = worldX - obj.x;
+                                dragOffset.y = worldY - obj.y;
+                                break;
+                            }
+                        }
+                    } else {
+                        // Drag selected object
+                        selectedObject.x = worldX - dragOffset.x;
+                        selectedObject.y = worldY - dragOffset.y;
+                        
+                        // Update config if it's the shrine
+                        if (selectedObject.type === 'shrine') {
+                            if (!window.gameConfig.shrine) window.gameConfig.shrine = {};
+                            window.gameConfig.shrine.x = selectedObject.x;
+                            window.gameConfig.shrine.y = selectedObject.y;
+                        }
+                    }
+                } else {
+                    selectedObject = null;
+                }
+                
+                // Draw selection indicator
+                if (selectedObject) {
+                    ctx.strokeStyle = '#ffff00';
+                    ctx.lineWidth = 2;
+                    ctx.strokeRect(
+                        selectedObject.x - camera.x - 2,
+                        selectedObject.y - camera.y - 2,
+                        selectedObject.width + 4,
+                        selectedObject.height + 4
+                    );
+                }
+            }
+
+            // ===== GAME PARAMETERS =====
+            lib.showGameParameters({
+                name: 'Game Settings',
+                params: {
+                    'Player Health': {
+                        key: 'player.startingHealth',
+                        type: 'slider',
+                        min: 3,
+                        max: 7,
+                        step: 1,
+                        onChange: (value) => {
+                            window.gameConfig.player.startingHealth = value;
+                            player.maxHealth = value * 2;
+                            player.health = Math.min(player.health, player.maxHealth);
+                        }
+                    },
+                    'Enemy Health': {
+                        key: 'enemies.healthMultiplier',
+                        type: 'slider',
+                        min: 0.5,
+                        max: 2,
+                        step: 0.1,
+                        onChange: (value) => {
+                            window.gameConfig.enemies.healthMultiplier = value;
+                            // Update existing enemies
+                            enemies.forEach(enemy => {
+                                const baseHealth = enemy.type === 'shadow_wolf' ? 3 : 1;
+                                enemy.maxHealth = baseHealth * value;
+                                enemy.health = Math.min(enemy.health, enemy.maxHealth);
+                            });
+                        }
+                    },
+                    'Start with Dash Strike': {
+                        key: 'abilities.dashStrikeUnlocked',
+                        type: 'checkbox',
+                        onChange: (value) => {
+                            window.gameConfig.abilities.dashStrikeUnlocked = value;
+                            player.abilities.dashStrike = value;
+                        }
+                    }
+                }
+            });
+
+            // ===== INITIALIZATION =====
+            await preloadAssets();
+            initWorld();
+            
+            // Start music
+            if (mode === 'play') {
+                playMusic('music_forest_exploration', 0.3);
+            }
+
+            // ===== GAME LOOP =====
+            let lastTime = performance.now();
+
+            function gameLoop(timestamp) {
+                let dt = (timestamp - lastTime) / 1000;
+                lastTime = timestamp;
+                
+                // Limit delta time
+                dt = Math.min(dt, 0.11);
+                
+                if (mode === 'edit') {
+                    // Edit mode: disable gameplay, enable editing
+                    updateCamera();
+                    render();
+                    handleEditMode();
+                } else {
+                    // Play mode: full game logic
+                    updatePlayer(dt);
+                    updateEnemies(dt);
+                    updateEffects(dt);
+                    updateCamera();
+                    render();
+                    updateUI();
+                }
+                
+                requestAnimationFrame(gameLoop);
+            }
+            
+            requestAnimationFrame(gameLoop);
+        }
+    </script>
+</body>
+</html>
