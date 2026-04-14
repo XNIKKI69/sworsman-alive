@@ -1,0 +1,48 @@
+{
+  "player": {
+    "startingHealth": 4,
+    "damageMultiplier": 1,
+    "movementSpeed": 1,
+    "dodgeCooldown": 1
+  },
+  "enemies": {
+    "healthMultiplier": 1,
+    "damageMultiplier": 1,
+    "spawnDensity": 1,
+    "aggressionRange": 1,
+    "slime": {
+      "baseHealth": 1,
+      "baseDamage": 1,
+      "baseSpeed": 60
+    },
+    "shadowWolf": {
+      "baseHealth": 3,
+      "baseDamage": 2,
+      "baseSpeed": 120
+    }
+  },
+  "abilities": {
+    "dashStrikeUnlocked": true
+  },
+  "shrine": {
+    "x": 360,
+    "y": 150,
+    "discovered": false
+  },
+  "visual": {
+    "playerColorPalette": "default",
+    "timeOfDay": "day",
+    "corruptionIntensity": "medium"
+  },
+  "world": {
+    "zones": [
+      "forest",
+      "village",
+      "cave",
+      "mountain",
+      "castle"
+    ],
+    "width": 120,
+    "height": 200
+  }
+}
